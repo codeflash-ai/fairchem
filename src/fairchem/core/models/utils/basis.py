@@ -226,13 +226,15 @@ class Basis(nn.Module):
                 elif "mul" in self.basis_type or "m40" in self.basis_type:
                     # multiply sined node features into spherical edge feature (inspired by theory in spherical harmonics)
                     r = self.lin(x_sine)
-                    outer = torch.einsum("ik,ij->ikj", edge_attr_sph, r)
-                    return torch.flatten(outer, start_dim=1)
+                    return (edge_attr_sph.unsqueeze(2) * r.unsqueeze(1)).reshape(
+                        x.size(0), -1
+                    )
                 else:
                     raise RuntimeError(f"Unknown basis type called {self.basis_type}")
             else:
-                outer = torch.einsum("ik,ij->ikj", edge_attr_sph, x[:, 3:])
-                return torch.flatten(outer, start_dim=1)
+                return (edge_attr_sph.unsqueeze(2) * x[:, 3:].unsqueeze(1)).reshape(
+                    x.size(0), -1
+                )
 
         elif "raw" in self.basis_type:
             # do nothing, just return node features
