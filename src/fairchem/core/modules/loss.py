@@ -172,14 +172,13 @@ class DDPMTLoss(nn.Module):
 class MAELoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.loss = nn.L1Loss()
+        self.loss = nn.L1Loss(reduction="none")
         # reduction should be none as it is handled in DDPLoss
-        self.loss.reduction = "none"
 
     def forward(
         self, pred: torch.Tensor, target: torch.Tensor, natoms: torch.Tensor
     ) -> torch.Tensor:
-        return self.loss(pred, target)
+        return nn.functional.l1_loss(pred, target, reduction="none")
 
 
 @registry.register_loss("mse")
