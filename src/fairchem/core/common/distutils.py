@@ -155,7 +155,12 @@ def initialized() -> bool:
 
 
 def get_rank() -> int:
-    return dist.get_rank() if initialized() else 0
+    # Inline logic to avoid unnecessary function call overhead and redundant checks
+    if not dist.is_available():
+        return 0
+    if not dist.is_initialized():
+        return 0
+    return dist.get_rank()
 
 
 def get_world_size() -> int:
