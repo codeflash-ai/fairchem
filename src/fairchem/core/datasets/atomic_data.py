@@ -533,7 +533,8 @@ class AtomicData:
 
     # TODO clean
     def values(self):
-        return [item for _, item in self]
+        keys = sorted(self.__keys__)
+        return [getattr(self, key) for key in keys]
 
     ###############################
     #       basic operations      #
