@@ -202,7 +202,17 @@ def calculate_phonon_frequencies(
     if qpoints is None:
         qpoints = get_commensurate_points(phonon.supercell_matrix)
 
-    frequencies = np.stack([phonon.get_frequencies(q) for q in qpoints])
+    # Preallocate frequencies array for better performance and memory efficiency
+    qpoints = np.asarray(qpoints)
+    num_q = len(qpoints)
+    # Get the shape/dimension of the output frequencies by using the first call
+    freq0 = phonon.get_frequencies(qpoints[0])
+    freq0 = np.asarray(freq0)
+    shape = (num_q,) + freq0.shape
+    frequencies = np.empty(shape, dtype=freq0.dtype)
+    frequencies[0] = freq0
+    for i in range(1, num_q):
+        frequencies[i] = phonon.get_frequencies(qpoints[i])
 
     return frequencies
 
