@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from fairchem.core.common.utils import StrEnum
 
+_settings_turbo = None
+
 
 class UMATask(StrEnum):
     OMOL = "omol"
@@ -106,14 +108,17 @@ def inference_settings_default():
 # the course the simulation. For smaller systems
 # activation_checkpointing can be turned off for some extra speed gain
 def inference_settings_turbo():
-    return InferenceSettings(
-        tf32=True,
-        activation_checkpointing=True,
-        merge_mole=True,
-        compile=True,
-        external_graph_gen=False,
-        internal_graph_gen_version=2,
-    )
+    global _settings_turbo
+    if _settings_turbo is None:
+        _settings_turbo = InferenceSettings(
+            tf32=True,
+            activation_checkpointing=True,
+            merge_mole=True,
+            compile=True,
+            external_graph_gen=False,
+            internal_graph_gen_version=2,
+        )
+    return _settings_turbo
 
 
 # this mode corresponds to the default settings used for training and evaluation
