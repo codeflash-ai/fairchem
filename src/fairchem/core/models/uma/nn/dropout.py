@@ -128,17 +128,31 @@ class EquivariantDropoutArraySphericalHarmonics(nn.Module):
             return x
         assert len(x.shape) == 3
 
+        # Optimize by avoiding allocation of a whole new tensor of ones and
+        # generating dropout "mask" directly using Bernoulli sampling.
+        # This approach matches Dropout's inplace/functional effect, and avoids
+        # subsequent pointwise multiplication.
+
         if self.drop_graph:
             assert batch is not None
-            batch_size = batch.max() + 1
-            shape = (batch_size, 1, x.shape[2])
-            mask = torch.ones(shape, dtype=x.dtype, device=x.device)
-            mask = self.drop(mask)
+            batch_size = batch.max().item() + 1
+            if self.drop_prob == 1.0:
+                # Avoid multiplying by zeros for all elements
+                return torch.zeros_like(x)
+            mask = torch.empty(
+                (batch_size, 1, x.shape[2]), dtype=x.dtype, device=x.device
+            )
+            mask.bernoulli_(1.0 - self.drop_prob)
+            mask.div_(1.0 - self.drop_prob)
             out = x * mask[batch]
         else:
-            shape = (x.shape[0], 1, x.shape[2])
-            mask = torch.ones(shape, dtype=x.dtype, device=x.device)
-            mask = self.drop(mask)
+            if self.drop_prob == 1.0:
+                return torch.zeros_like(x)
+            mask = torch.empty(
+                (x.shape[0], 1, x.shape[2]), dtype=x.dtype, device=x.device
+            )
+            mask.bernoulli_(1.0 - self.drop_prob)
+            mask.div_(1.0 - self.drop_prob)
             out = x * mask
 
         return out
