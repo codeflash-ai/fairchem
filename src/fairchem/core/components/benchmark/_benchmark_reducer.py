@@ -287,7 +287,9 @@ class JsonDFReducer(BenchmarkReducer):
             ]
             metrics.update(
                 {
-                    f"{col},mae": (results[col] - self.target_data[col]).abs().mean()
+                    f"{col},mae": np.mean(
+                        np.abs(results[col].values - self.target_data[col].values)
+                    )
                     for col in common_cols
                 }
             )
@@ -305,9 +307,9 @@ class JsonDFReducer(BenchmarkReducer):
                     )
                     forces_target_norm = np.linalg.norm(forces_target, axis=1)
 
-                    metrics[f"{target_name},mae"] = np.mean(
-                        np.abs(forces - forces_target)
-                    )
+                    forces_diff = forces - forces_target
+                    metrics[f"{target_name},mae"] = np.mean(np.abs(forces_diff))
+
                     metrics[f"{target_name},cosine_similarity"] = np.sum(
                         forces_target * forces
                     ) / max(
@@ -317,10 +319,11 @@ class JsonDFReducer(BenchmarkReducer):
                         np.abs(forces_norm - forces_target_norm)
                     )
                 else:
-                    metrics[f"{target_name},mae"] = (
-                        (results[target_name] - results[f"{target_name}_target"])
-                        .abs()
-                        .mean()
+                    metrics[f"{target_name},mae"] = np.mean(
+                        np.abs(
+                            results[target_name].values
+                            - results[f"{target_name}_target"].values
+                        )
                     )
 
         return pd.DataFrame([metrics], index=[run_name])
