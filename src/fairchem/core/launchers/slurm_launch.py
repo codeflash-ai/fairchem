@@ -35,6 +35,10 @@ if TYPE_CHECKING:
 
 
 def _get_slurm_env() -> SlurmEnv:
+    if "SLURM_JOB_ID" not in os.environ:
+        # slurm environment variables are undefined, running locally
+        return SlurmEnv()
+
     slurm_job_env = SlurmJobEnvironment()
     try:
         slurm_env = SlurmEnv(
