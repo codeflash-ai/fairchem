@@ -212,12 +212,16 @@ class PerAtomMAELoss(nn.Module):
     def forward(
         self, pred: torch.Tensor, target: torch.Tensor, natoms: torch.Tensor
     ) -> torch.Tensor:
-        _natoms = torch.reshape(natoms, target.shape)
+        _natoms = (
+            natoms.reshape(target.shape) if natoms.shape != target.shape else natoms
+        )
         # check if target is a scalar
         assert target.dim() == 1 or (target.dim() == 2 and target.shape[1] == 1)
         # check per_atom shape
-        assert (target / _natoms).shape == target.shape
-        return self.loss(pred / _natoms, target / _natoms)
+        target_div = target / _natoms
+        assert target_div.shape == target.shape
+        pred_div = pred / _natoms
+        return self.loss(pred_div, target_div)
 
 
 @registry.register_loss("l2norm")
