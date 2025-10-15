@@ -186,14 +186,17 @@ class MAELoss(nn.Module):
 class MSELoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.loss = nn.MSELoss()
-        # reduction should be none as it is handled in DDPLoss
-        self.loss.reduction = "none"
+        # Use the reduction argument directly in the constructor for efficiency
+        self.loss = nn.MSELoss(
+            reduction="none"
+        )  # reduction should be none as it is handled in DDPLoss
 
     def forward(
         self, pred: torch.Tensor, target: torch.Tensor, natoms: torch.Tensor
     ) -> torch.Tensor:
-        return self.loss(pred, target)
+        # Avoid unnecessary function call layers, directly use F.mse_loss for efficiency
+        # F.mse_loss called with reduction="none" is marginally faster than nn.MSELoss module
+        return torch.nn.functional.mse_loss(pred, target, reduction="none")
 
 
 @registry.register_loss("per_atom_mae")
