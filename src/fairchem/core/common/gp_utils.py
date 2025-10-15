@@ -139,7 +139,7 @@ def get_gp_rank() -> int:
 
 
 def get_dp_world_size() -> int:
-    return dist.get_world_size(group=get_dp_group())
+    return dist.get_world_size(group=_DATA_PARALLEL_GROUP)
 
 
 def get_gp_world_size() -> int:
