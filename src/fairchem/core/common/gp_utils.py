@@ -135,7 +135,9 @@ def get_dp_rank() -> int:
 
 
 def get_gp_rank() -> int:
-    return dist.get_rank(group=get_gp_group())
+    # Cache the group locally to avoid repeated function calls for a minor speedup
+    group = get_gp_group()
+    return dist.get_rank(group=group)
 
 
 def get_dp_world_size() -> int:
@@ -194,8 +196,18 @@ def _split_tensor(
     dim: int = -1,
     contiguous_chunks: bool = False,
 ):
-    tensor_list = torch.split(tensor, _tensor_to_split_partitions(tensor, dim), dim=dim)
+    # Inline the logic of _tensor_to_split_partitions to avoid redundant processing and allocations
+    group = get_gp_group()
+    num_parts = dist.get_world_size(group=group)
+    size = tensor.size(dim)
+    # Use integer partitioning to avoid the overhead of numpy and np.zeros
+    chunk_size, remainder = divmod(size, num_parts)
+    part_sizes = [
+        chunk_size + 1 if i < remainder else chunk_size for i in range(num_parts)
+    ]
+    tensor_list = torch.split(tensor, part_sizes, dim=dim)
     if contiguous_chunks:
+        # Use generator expression to avoid unnecessary tuple creation if not required
         return tuple(chunk.contiguous() for chunk in tensor_list)
     return tensor_list
 
