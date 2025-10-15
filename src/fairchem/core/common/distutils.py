@@ -159,7 +159,9 @@ def get_rank() -> int:
 
 
 def get_world_size() -> int:
-    return dist.get_world_size() if initialized() else 1
+    if dist.is_available() and dist.is_initialized():
+        return dist.get_world_size()
+    return 1
 
 
 def is_master() -> bool:
