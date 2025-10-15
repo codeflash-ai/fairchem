@@ -126,11 +126,13 @@ class DDPMTLoss(nn.Module):
         return self._ddp_mean(num_samples, per_struct_loss.sum())
 
     def _reduction(self, input, mult_mask, loss, natoms):
-        num_samples = loss[mult_mask].numel()
-        if self.reduction in self.reduction_map:
-            return self.reduction_map[self.reduction](
-                input, mult_mask, num_samples, loss, natoms
-            )
+        # Fast path: get num_samples without masking/allocating new tensor.
+        # mult_mask should be a boolean mask, so .sum() (int) is # of Trues rather than nonzero().shape[0]
+        num_samples = mult_mask.sum().item()
+        reduction_fn = self.reduction_map.get(self.reduction)
+        if reduction_fn is not None:
+            # Direct lookup, don't use 'self.reduction in self.reduction_map', as we already checked at init
+            return reduction_fn(input, mult_mask, num_samples, loss, natoms)
         else:
             raise ValueError("Reduction must be one of: 'mean', 'sum'")
 
