@@ -11,6 +11,9 @@ from dataclasses import dataclass
 
 from fairchem.core.common.utils import StrEnum
 
+# Cache for singleton inference settings object
+_inference_settings_traineval: InferenceSettings | None = None
+
 
 class UMATask(StrEnum):
     OMOL = "omol"
@@ -118,13 +121,17 @@ def inference_settings_turbo():
 
 # this mode corresponds to the default settings used for training and evaluation
 def inference_settings_traineval():
-    return InferenceSettings(
-        tf32=False,
-        activation_checkpointing=False,
-        merge_mole=False,
-        compile=False,
-        internal_graph_gen_version=1,
-    )
+    global _inference_settings_traineval
+    if _inference_settings_traineval is None:
+        # Construct a single instance and reuse it to avoid object creation overhead
+        _inference_settings_traineval = InferenceSettings(
+            tf32=False,
+            activation_checkpointing=False,
+            merge_mole=False,
+            compile=False,
+            internal_graph_gen_version=1,
+        )
+    return _inference_settings_traineval
 
 
 NAME_TO_INFERENCE_SETTING = {
