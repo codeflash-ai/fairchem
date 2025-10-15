@@ -91,14 +91,16 @@ class InferenceSettings:
 # this is most general setting that works for most systems and models,
 # not optimized for speed
 def inference_settings_default():
-    return InferenceSettings(
-        tf32=False,
-        activation_checkpointing=True,
-        merge_mole=False,
-        compile=False,
-        external_graph_gen=False,
-        internal_graph_gen_version=2,
-    )
+    if not hasattr(inference_settings_default, "_default"):
+        inference_settings_default._default = InferenceSettings(
+            tf32=False,
+            activation_checkpointing=True,
+            merge_mole=False,
+            compile=False,
+            external_graph_gen=False,
+            internal_graph_gen_version=2,
+        )
+    return inference_settings_default._default
 
 
 # this setting is designed for running long simulations or optimizations
