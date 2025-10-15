@@ -320,16 +320,14 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
     if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
-        pbc = torch.BoolTensor([True, True, True])
-        for i in range(3):
-            if not torch.any(data.pbc[:, i]).item():
-                pbc[i] = False
-            elif torch.all(data.pbc[:, i]).item():
-                pbc[i] = True
-            else:
-                raise RuntimeError(
-                    "Different structures in the batch have different PBC configurations. This is not currently supported."
-                )
+        col_any = torch.any(data.pbc, dim=0)
+        col_all = torch.all(data.pbc, dim=0)
+        mixed_mask = col_any & (~col_all)
+        if torch.any(mixed_mask):
+            raise RuntimeError(
+                "Different structures in the batch have different PBC configurations. This is not currently supported."
+            )
+        pbc = col_all.bool()
     # elif pbc is not None and hasattr(data, "pbc"):
     #     # This can be on a different device, deffering to a new PR to fix this TODO
     #     if (pbc != data.pbc).all():
