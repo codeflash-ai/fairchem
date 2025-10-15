@@ -218,14 +218,8 @@ def get_attn_mask_env(
     """
     batch_size, num_neighbors = src_mask.shape
     # broadcast src_mask to attention mask shape
-    attn_mask = (
-        src_mask.unsqueeze(1)
-        .unsqueeze(2)  # (num_nodes, 1, 1, num_neighbors)
-        .expand(
-            -1, num_heads, num_neighbors, -1
-        )  # (num_nodes, num_heads, num_neighbors, num_neighbors)
-        .reshape(batch_size * num_heads, num_neighbors, num_neighbors)
-    )
+    attn_mask = src_mask.repeat_interleave(num_heads, dim=0)
+    attn_mask = attn_mask.unsqueeze(1).expand(-1, num_neighbors, -1)
     return attn_mask
 
 
