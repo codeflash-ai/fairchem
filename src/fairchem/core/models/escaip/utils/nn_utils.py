@@ -132,17 +132,26 @@ def get_feedforward(
 def no_weight_decay(model):
     # no weight decay on layer norms and embeddings
     # ref: https://discuss.pytorch.org/t/weight-decay-in-the-optimizers-is-a-bad-idea-especially-with-batchnorm/16994
-    no_wd_list = []
-    named_parameters_list = [name for name, _ in model.named_parameters()]
+
+    no_wd_set = set()
+    named_parameters_set = set(name for name, _ in model.named_parameters())
+
+    modules_to_check = (nn.Linear, nn.Embedding, nn.LayerNorm, nn.RMSNorm)
+    is_linear = nn.Linear
+
     for module_name, module in model.named_modules():
-        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm, nn.RMSNorm)):
-            for parameter_name, _ in module.named_parameters():
-                if isinstance(module, torch.nn.Linear) and "weight" in parameter_name:
+        if isinstance(module, modules_to_check):
+            # micro-optimization: avoid creating intermediate lists by iterating directly
+            for parameter_name, _ in module.named_parameters(recurse=False):
+                if isinstance(module, is_linear) and "weight" in parameter_name:
                     continue
-                global_parameter_name = module_name + "." + parameter_name
-                assert global_parameter_name in named_parameters_list
-                no_wd_list.append(global_parameter_name)
-    return set(no_wd_list)
+                global_parameter_name = (
+                    f"{module_name}.{parameter_name}" if module_name else parameter_name
+                )
+                # set lookups are O(1), and assert is unchanged
+                assert global_parameter_name in named_parameters_set
+                no_wd_set.add(global_parameter_name)
+    return no_wd_set
 
 
 def init_linear_weights(module, gain=1.0):
