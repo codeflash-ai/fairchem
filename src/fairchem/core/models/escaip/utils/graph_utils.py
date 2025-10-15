@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 
 import torch
-import torch.nn.functional as F
 from e3nn.o3._spherical_harmonics import _spherical_harmonics
 
 
@@ -259,28 +258,100 @@ def pad_batch(
         pad_size >= 0
     ), "Number of nodes exceeds the maximum number of nodes per batch"
 
-    # pad the features
-    atomic_numbers = F.pad(atomic_numbers, (0, pad_size), value=0)
-    node_direction_expansion = F.pad(
-        node_direction_expansion, (0, 0, 0, pad_size), value=0
-    )
-    edge_distance_expansion = F.pad(
-        edge_distance_expansion, (0, 0, 0, 0, 0, pad_size), value=0
-    )
-    edge_direction = F.pad(edge_direction, (0, 0, 0, 0, 0, pad_size), value=0)
-    neighbor_list = F.pad(neighbor_list, (0, 0, 0, pad_size), value=-1)
-    neighbor_mask = F.pad(neighbor_mask, (0, 0, 0, pad_size), value=0)
-    node_batch = F.pad(node_batch, (0, pad_size), value=num_graphs)
+    # Preallocate outputs wherever possible instead of F.pad for some cases
+
+    # atomic_numbers: shape (num_nodes,)
+    if pad_size > 0:
+        out_atomic_numbers = atomic_numbers.new_full((max_atoms,), 0)
+        out_atomic_numbers[:num_nodes] = atomic_numbers
+        atomic_numbers = out_atomic_numbers
+    else:
+        atomic_numbers = atomic_numbers
+
+    # node_direction_expansion: (num_nodes, D...)
+    if pad_size > 0:
+        shape = list(node_direction_expansion.shape)
+        shape[0] = max_atoms
+        out_node_direction_expansion = node_direction_expansion.new_zeros(shape)
+        out_node_direction_expansion[:num_nodes] = node_direction_expansion
+        node_direction_expansion = out_node_direction_expansion
+    else:
+        node_direction_expansion = node_direction_expansion
+
+    # edge_distance_expansion: (num_nodes, ?, ?)
+    if pad_size > 0:
+        shape = list(edge_distance_expansion.shape)
+        shape[0] = max_atoms
+        out_edge_distance_expansion = edge_distance_expansion.new_zeros(shape)
+        out_edge_distance_expansion[:num_nodes] = edge_distance_expansion
+        edge_distance_expansion = out_edge_distance_expansion
+    else:
+        edge_distance_expansion = edge_distance_expansion
+
+    # edge_direction: (num_nodes, ?, ?)
+    if pad_size > 0:
+        shape = list(edge_direction.shape)
+        shape[0] = max_atoms
+        out_edge_direction = edge_direction.new_zeros(shape)
+        out_edge_direction[:num_nodes] = edge_direction
+        edge_direction = out_edge_direction
+    else:
+        edge_direction = edge_direction
+
+    # neighbor_list: (num_nodes, K)
+    if pad_size > 0:
+        shape = list(neighbor_list.shape)
+        shape[0] = max_atoms
+        out_neighbor_list = neighbor_list.new_full(shape, -1)
+        out_neighbor_list[:num_nodes] = neighbor_list
+        neighbor_list = out_neighbor_list
+    else:
+        neighbor_list = neighbor_list
+
+    # neighbor_mask: (num_nodes, K)
+    if pad_size > 0:
+        shape = list(neighbor_mask.shape)
+        shape[0] = max_atoms
+        out_neighbor_mask = neighbor_mask.new_zeros(shape)
+        out_neighbor_mask[:num_nodes] = neighbor_mask
+        neighbor_mask = out_neighbor_mask
+    else:
+        neighbor_mask = neighbor_mask
+
+    # node_batch: (num_nodes,)
+    if pad_size > 0:
+        out_node_batch = node_batch.new_full((max_atoms,), num_graphs)
+        out_node_batch[:num_nodes] = node_batch
+        node_batch = out_node_batch
+    else:
+        node_batch = node_batch
+
+    # src_mask: (num_nodes, K), optional
     if src_mask is not None:
-        src_mask = F.pad(src_mask, (0, 0, 0, pad_size), value=0)
+        if pad_size > 0:
+            shape = list(src_mask.shape)
+            shape[0] = max_atoms
+            out_src_mask = src_mask.new_zeros(shape)
+            out_src_mask[:num_nodes] = src_mask
+            src_mask = out_src_mask
+        else:
+            src_mask = src_mask
 
-    # create the padding mask
-    node_padding_mask = torch.ones(max_atoms, dtype=torch.bool, device=device)
-    node_padding_mask[num_nodes:] = False
+    # node_padding_mask
+    node_padding_mask = torch.empty(max_atoms, dtype=torch.bool, device=device)
+    if num_nodes < max_atoms:
+        node_padding_mask[:num_nodes].fill_(True)
+        node_padding_mask[num_nodes:].fill_(False)
+    else:
+        node_padding_mask.fill_(True)
 
-    # TODO look into a better way to handle this
-    graph_padding_mask = torch.ones(max_batch_size, dtype=torch.bool, device=device)
-    graph_padding_mask[num_graphs:] = False
+    # graph_padding_mask
+    graph_padding_mask = torch.empty(max_batch_size, dtype=torch.bool, device=device)
+    if num_graphs < max_batch_size:
+        graph_padding_mask[:num_graphs].fill_(True)
+        graph_padding_mask[num_graphs:].fill_(False)
+    else:
+        graph_padding_mask.fill_(True)
 
     return (
         atomic_numbers,
