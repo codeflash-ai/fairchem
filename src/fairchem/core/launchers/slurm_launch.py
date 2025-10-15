@@ -53,16 +53,15 @@ def _get_slurm_env() -> SlurmEnv:
 
 def map_job_config_to_dist_config(job_cfg: JobConfig) -> dict:
     scheduler_config = job_cfg.scheduler
+    is_cpu = job_cfg.device_type == DeviceType.CPU
     return {
         "world_size": scheduler_config.num_nodes * scheduler_config.ranks_per_node,
-        "distributed_backend": (
-            "gloo" if job_cfg.device_type == DeviceType.CPU else "nccl"
-        ),
+        "distributed_backend": "gloo" if is_cpu else "nccl",
         "submit": scheduler_config.mode == SchedulerType.SLURM,
-        "cpu": job_cfg.device_type == DeviceType.CPU,
+        "cpu": is_cpu,
         "init_method": scheduler_config.distributed_init_method,
         # for distributed shared file initialization
-        "shared_file_dir": os.path.join(job_cfg.run_dir, job_cfg.timestamp_id),
+        "shared_file_dir": f"{job_cfg.run_dir}/{job_cfg.timestamp_id}",
         "array_job_num": job_cfg.metadata.array_job_num,
     }
 
