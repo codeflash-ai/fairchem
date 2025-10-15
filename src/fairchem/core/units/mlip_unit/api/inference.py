@@ -118,13 +118,15 @@ def inference_settings_turbo():
 
 # this mode corresponds to the default settings used for training and evaluation
 def inference_settings_traineval():
-    return InferenceSettings(
-        tf32=False,
-        activation_checkpointing=False,
-        merge_mole=False,
-        compile=False,
-        internal_graph_gen_version=1,
-    )
+    if not hasattr(inference_settings_traineval, "_instance"):
+        inference_settings_traineval._instance = InferenceSettings(
+            tf32=False,
+            activation_checkpointing=False,
+            merge_mole=False,
+            compile=False,
+            internal_graph_gen_version=1,
+        )
+    return inference_settings_traineval._instance
 
 
 NAME_TO_INFERENCE_SETTING = {
