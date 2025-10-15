@@ -325,10 +325,12 @@ def patch_singleton_atom(edge_direction, neighbor_list, neighbor_mask):
     # Find the singleton atoms
     idx = torch.where(neighbor_mask.sum(dim=-1) == 0)[0]
 
-    # patch edge_direction to unit vector
-    edge_direction[idx, 0] = torch.tensor(
-        [1.0, 0.0, 0.0], device=edge_direction.device, dtype=edge_direction.dtype
-    )
+    if idx.numel() == 0:
+        return edge_direction, neighbor_list, neighbor_mask
+
+    # patch edge_direction to unit vector without creating new tensors in loop
+    edge_direction[idx, 0] = 0  # zero all three dims for selected entries
+    edge_direction[idx, 0, 0] = 1  # set x-component to 1
 
     # patch neighbor_list to itself
     neighbor_list[idx, 0] = idx
