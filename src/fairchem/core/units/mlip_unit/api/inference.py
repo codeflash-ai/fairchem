@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from fairchem.core.common.utils import StrEnum
 
+_inference_settings_default_instance = None
+
 
 class UMATask(StrEnum):
     OMOL = "omol"
@@ -91,14 +93,17 @@ class InferenceSettings:
 # this is most general setting that works for most systems and models,
 # not optimized for speed
 def inference_settings_default():
-    return InferenceSettings(
-        tf32=False,
-        activation_checkpointing=True,
-        merge_mole=False,
-        compile=False,
-        external_graph_gen=False,
-        internal_graph_gen_version=2,
-    )
+    global _inference_settings_default_instance
+    if _inference_settings_default_instance is None:
+        _inference_settings_default_instance = InferenceSettings(
+            tf32=False,
+            activation_checkpointing=True,
+            merge_mole=False,
+            compile=False,
+            external_graph_gen=False,
+            internal_graph_gen_version=2,
+        )
+    return _inference_settings_default_instance
 
 
 # this setting is designed for running long simulations or optimizations
