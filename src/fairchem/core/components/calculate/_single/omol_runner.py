@@ -49,7 +49,7 @@ class OMolRunner(CalculateRunner):
         self.benchmark = benchmark
         super().__init__(calculator=calculator, input_data=input_data)
 
-        self.input_keys = list(input_data.keys())
+        self.input_keys = np.array(list(input_data.keys()))
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
         """
