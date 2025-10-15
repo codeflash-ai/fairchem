@@ -127,6 +127,7 @@ def get_dp_group():
 
 
 def get_gp_group():
+    # Cached global, direct read is fastest
     return _GRAPH_PARALLEL_GROUP
 
 
@@ -135,7 +136,9 @@ def get_dp_rank() -> int:
 
 
 def get_gp_rank() -> int:
-    return dist.get_rank(group=get_gp_group())
+    # Inline the _GRAPH_PARALLEL_GROUP lookup to avoid a function call per invocation.
+    # This reduces Python function call overhead when called very frequently.
+    return dist.get_rank(group=_GRAPH_PARALLEL_GROUP)
 
 
 def get_dp_world_size() -> int:
