@@ -48,12 +48,26 @@ class AdsorbMLReducer(JsonDFReducer):
         Returns:
             DataFrame containing computed metrics with run_name as index
         """
-        """This will just compute MAE of everything that is common in the results and target dataframes"""
-        results["diff"] = abs(
-            results[f"{self.target_data_key}"]
-            - results[f"{self.target_data_key}_target"]
-        )
-        success_rate = (results["diff"] <= self.threshold).sum() / results["diff"].size
-        num_anomalies = results["anomaly_count"].sum()
+        # This will just compute MAE of everything that is common in the results and target dataframes
+
+        # Use numpy for faster elementwise operations
+        target = results[f"{self.target_data_key}"].to_numpy()
+        target_true = results[f"{self.target_data_key}_target"].to_numpy()
+        diff = abs(target - target_true)
+        # Add diff column in-place to preserve behavioral preservation
+        results["diff"] = diff
+
+        # Compute "success_rate" efficiently using numpy boolean indexing
+        success_rate = (diff <= self.threshold).sum() / diff.size
+
+        # Use numpy sum for anomaly_count for performance if possible
+        if pd.api.types.is_numeric_dtype(results["anomaly_count"]):
+            num_anomalies = results["anomaly_count"].to_numpy().sum()
+        else:
+            num_anomalies = results[
+                "anomaly_count"
+            ].sum()  # fallback for non-numeric types
+
         metrics = {"success_rate": success_rate, "num_anomalies": num_anomalies}
+        # Avoid overhead of regular DataFrame creation: construct directly with index name argument
         return pd.DataFrame([metrics], index=[run_name])
