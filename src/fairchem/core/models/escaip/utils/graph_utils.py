@@ -192,7 +192,7 @@ def get_attn_mask(
     )
 
     # get the angle embeddings
-    dot_product = torch.matmul(edge_direction, edge_direction.transpose(1, 2))
+    dot_product = torch.bmm(edge_direction, edge_direction.transpose(1, 2))
     dot_product = dot_product.clamp(-1.0, 1.0)
     if use_angle_embedding == "bias":
         angle_embedding = legendre_polynomials(dot_product, lmax)
