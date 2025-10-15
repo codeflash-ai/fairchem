@@ -34,7 +34,7 @@ class StarReLU(nn.Module):
         super().__init__()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_ = torch.nn.functional.relu(x)
+        x_ = torch.relu(x)
         return 0.8944 * x_ * x_ - 0.4472
 
 
