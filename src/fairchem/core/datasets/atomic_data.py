@@ -658,10 +658,17 @@ class AtomicData:
 
     def apply(self, func):
         r"""Applies the function :obj:`func` to all tensor attributes"""
-        for key in self.__keys__:
-            self[key] = self.__apply__(self[key], func)
+        __keys__ = self.__keys__
+        for key in __keys__:
+            value = self[key]
+            new_value = self.__apply__(value, func)
+            if new_value is not value:
+                self[key] = new_value
 
-        self["batch"] = self.__apply__(self["batch"], func)
+        value = self["batch"]
+        new_value = self.__apply__(value, func)
+        if new_value is not value:
+            self["batch"] = new_value
 
         return self
 
