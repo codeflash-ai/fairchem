@@ -159,10 +159,14 @@ def get_rank() -> int:
 
 
 def get_world_size() -> int:
-    return dist.get_world_size() if initialized() else 1
+    # Cache initialized() to avoid multiple calls to dist
+    if not initialized():
+        return 1
+    return dist.get_world_size()
 
 
 def is_master() -> bool:
+    # get_rank() is already efficient/guarded in distutils
     return get_rank() == 0
 
 
@@ -227,10 +231,13 @@ def all_gather(data, group=dist.group.WORLD, device=None) -> list[torch.Tensor]:
 
 def gather_objects(data: T, group: dist.ProcessGroup = dist.group.WORLD) -> list[T]:
     """Gather a list of pickleable objects into rank 0"""
-    if get_world_size() == 1:
+    world_size = get_world_size()
+    if world_size == 1:
         return [data]
 
-    output = [None for _ in range(get_world_size())] if is_master() else None
+    master = is_master()
+    # Avoid repeated get_world_size() calls and keep master computation outside loop/call
+    output = [None] * world_size if master else None
     dist.gather_object(data, output, group=group, dst=0)
     return output
 
