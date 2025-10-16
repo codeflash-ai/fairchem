@@ -133,14 +133,26 @@ def no_weight_decay(model):
     # no weight decay on layer norms and embeddings
     # ref: https://discuss.pytorch.org/t/weight-decay-in-the-optimizers-is-a-bad-idea-especially-with-batchnorm/16994
     no_wd_list = []
-    named_parameters_list = [name for name, _ in model.named_parameters()]
+    # Use set for faster lookup (~O(1)) for the assert rather than list (~O(n))
+    named_parameters_set = {name for name, _ in model.named_parameters()}
+    # Precompute types for isinstance to avoid repeated tuple allocation
+    no_decay_types = (nn.Linear, nn.Embedding, nn.LayerNorm, nn.RMSNorm)
+    linear_type = nn.Linear
     for module_name, module in model.named_modules():
-        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm, nn.RMSNorm)):
-            for parameter_name, _ in module.named_parameters():
-                if isinstance(module, torch.nn.Linear) and "weight" in parameter_name:
+        if isinstance(module, no_decay_types):
+            # Fast-path: Retrieve local parameter names only; no need for values.
+            # module.named_parameters() yields *full* param names for the whole tree,
+            # but set recurse=False for local parameters only
+            for parameter_name, _ in module.named_parameters(recurse=False):
+                # Only skip "weight" of Linear layers.
+                if isinstance(module, linear_type) and "weight" in parameter_name:
                     continue
-                global_parameter_name = module_name + "." + parameter_name
-                assert global_parameter_name in named_parameters_list
+                # Handle case where top-level module_name is '' (root)
+                if module_name:
+                    global_parameter_name = module_name + "." + parameter_name
+                else:
+                    global_parameter_name = parameter_name
+                assert global_parameter_name in named_parameters_set
                 no_wd_list.append(global_parameter_name)
     return set(no_wd_list)
 
