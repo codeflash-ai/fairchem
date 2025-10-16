@@ -20,6 +20,9 @@ from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
 from fairchem.core.common.typing import none_throws
 
+# Cache the world size when distributed is initialized and constant.
+_world_size: int | None = None
+
 T = TypeVar("T")
 DISTRIBUTED_PORT = 13356
 CURRENT_DEVICE_TYPE_STR = "CURRRENT_DEVICE_TYPE"
@@ -159,7 +162,15 @@ def get_rank() -> int:
 
 
 def get_world_size() -> int:
-    return dist.get_world_size() if initialized() else 1
+    # Avoid recomputation of world size if already known
+    global _world_size
+    if _world_size is not None:
+        return _world_size
+    if initialized():
+        ws = dist.get_world_size()
+        _world_size = ws
+        return ws
+    return 1
 
 
 def is_master() -> bool:
@@ -183,6 +194,7 @@ def broadcast(
 def broadcast_object_list(
     object_list: list[Any], src: int, group=dist.group.WORLD, device: str | None = None
 ) -> None:
+    # Bypass unnecessary distributed calls if world size is 1
     if get_world_size() == 1:
         return
     dist.broadcast_object_list(object_list, src, group, device)
