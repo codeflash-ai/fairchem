@@ -155,7 +155,9 @@ def initialized() -> bool:
 
 
 def get_rank() -> int:
-    return dist.get_rank() if initialized() else 0
+    if initialized():
+        return dist.get_rank()
+    return 0
 
 
 def get_world_size() -> int:
@@ -163,7 +165,9 @@ def get_world_size() -> int:
 
 
 def is_master() -> bool:
-    return get_rank() == 0
+    if initialized():
+        return dist.get_rank() == 0
+    return True
 
 
 def synchronize() -> None:
