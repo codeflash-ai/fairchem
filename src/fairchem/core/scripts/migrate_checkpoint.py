@@ -17,6 +17,22 @@ import torch
 from fairchem.core.scripts.migrate_imports import mapping
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
+_LOSS_FN = {
+    "_target_": "fairchem.core.modules.loss.DDPMTLoss",
+    "loss_fn": {"_target_": "fairchem.core.modules.loss.MAELoss"},
+    "reduction": "mean",
+    "coefficient": 1,
+}
+
+_OUT_SPEC = {"dim": [1, 9], "dtype": "float32"}
+
+_NORMALIZER_BASE = {
+    "_target_": "fairchem.core.modules.normalization.normalizer.Normalizer",
+    "mean": 0.0,
+}
+
+_METRICS = ["mae"]
+
 
 def find_new_module_name(module):
     if module in mapping:
@@ -54,25 +70,18 @@ class RenameUnpickler(pickle.Unpickler):
 
 
 def generate_stress_task_config(dataset_name, task_name, rmsd):
+    normalizer = _NORMALIZER_BASE.copy()
+    normalizer["rmsd"] = rmsd
     return {
         "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
         "name": task_name,
         "level": "system",
         "property": "stress",
-        "loss_fn": {
-            "_target_": "fairchem.core.modules.loss.DDPMTLoss",
-            "loss_fn": {"_target_": "fairchem.core.modules.loss.MAELoss"},
-            "reduction": "mean",
-            "coefficient": 1,
-        },
-        "out_spec": {"dim": [1, 9], "dtype": "float32"},
-        "normalizer": {
-            "_target_": "fairchem.core.modules.normalization.normalizer.Normalizer",
-            "mean": 0.0,
-            "rmsd": rmsd,  # 1.423
-        },
+        "loss_fn": _LOSS_FN,
+        "out_spec": _OUT_SPEC,
+        "normalizer": normalizer,
         "datasets": [dataset_name],
-        "metrics": ["mae"],
+        "metrics": _METRICS,
     }
 
 
