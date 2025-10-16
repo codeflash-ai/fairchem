@@ -9,37 +9,45 @@ from __future__ import annotations
 
 import torch
 
+_CG_CHANGE_MAT_CACHE = {}
+
 
 def cg_change_mat(ang_mom: int, device: str = "cpu") -> torch.tensor:
     if ang_mom not in [2]:
         raise NotImplementedError
 
     if ang_mom == 2:
-        change_mat = torch.tensor(
-            [
-                [3 ** (-0.5), 0, 0, 0, 3 ** (-0.5), 0, 0, 0, 3 ** (-0.5)],
-                [0, 0, 0, 0, 0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0],
-                [0, 0, -(2 ** (-0.5)), 0, 0, 0, 2 ** (-0.5), 0, 0],
-                [0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0, 0, 0, 0, 0],
-                [0, 0, 0.5**0.5, 0, 0, 0, 0.5**0.5, 0, 0],
-                [0, 2 ** (-0.5), 0, 2 ** (-0.5), 0, 0, 0, 0, 0],
+        cache_key = device
+        # Cache per device
+        if cache_key not in _CG_CHANGE_MAT_CACHE:
+            mat = torch.tensor(
                 [
-                    -(6 ** (-0.5)),
-                    0,
-                    0,
-                    0,
-                    2 * 6 ** (-0.5),
-                    0,
-                    0,
-                    0,
-                    -(6 ** (-0.5)),
+                    [3 ** (-0.5), 0, 0, 0, 3 ** (-0.5), 0, 0, 0, 3 ** (-0.5)],
+                    [0, 0, 0, 0, 0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0],
+                    [0, 0, -(2 ** (-0.5)), 0, 0, 0, 2 ** (-0.5), 0, 0],
+                    [0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0, 0, 0, 0, 0],
+                    [0, 0, 0.5**0.5, 0, 0, 0, 0.5**0.5, 0, 0],
+                    [0, 2 ** (-0.5), 0, 2 ** (-0.5), 0, 0, 0, 0, 0],
+                    [
+                        -(6 ** (-0.5)),
+                        0,
+                        0,
+                        0,
+                        2 * 6 ** (-0.5),
+                        0,
+                        0,
+                        0,
+                        -(6 ** (-0.5)),
+                    ],
+                    [0, 0, 0, 0, 0, 2 ** (-0.5), 0, 2 ** (-0.5), 0],
+                    [-(2 ** (-0.5)), 0, 0, 0, 0, 0, 0, 0, 2 ** (-0.5)],
                 ],
-                [0, 0, 0, 0, 0, 2 ** (-0.5), 0, 2 ** (-0.5), 0],
-                [-(2 ** (-0.5)), 0, 0, 0, 0, 0, 0, 0, 2 ** (-0.5)],
-            ],
-            device=device,
-        ).detach()
-
+                device=device,
+            ).detach()
+            _CG_CHANGE_MAT_CACHE[cache_key] = mat
+        else:
+            mat = _CG_CHANGE_MAT_CACHE[cache_key]
+        change_mat = mat
     return change_mat
 
 
@@ -49,8 +57,5 @@ def irreps_sum(ang_mom: int) -> int:
 
     :param ang_mom: max angular momenttum to sum up dimensions of irreps
     """
-    total = 0
-    for i in range(ang_mom + 1):
-        total += 2 * i + 1
-
-    return total
+    # sum_{i=0}^{ang_mom} (2i+1) = (ang_mom+1)^2
+    return (ang_mom + 1) ** 2
