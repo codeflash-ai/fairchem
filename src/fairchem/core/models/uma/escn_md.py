@@ -811,15 +811,21 @@ def compose_tensor(
         )
 
     batch_size = trace.shape[0]
-    decomposed_preds = torch.zeros(
-        batch_size, irreps_sum(2), device=trace.device
-    )  # rank 2
-    decomposed_preds[:, : irreps_sum(0)] = trace
-    decomposed_preds[:, irreps_sum(1) : irreps_sum(2)] = l2_symmetric
+
+    # Only compute irreps_sum once per index used
+    irreps0 = irreps_sum(0)
+    irreps1 = irreps_sum(1)
+    irreps2 = irreps_sum(2)
+
+    decomposed_preds = torch.zeros(batch_size, irreps2, device=trace.device)  # rank 2
+    decomposed_preds[:, :irreps0] = trace
+    decomposed_preds[:, irreps1:irreps2] = l2_symmetric
+
+    change_mat = cg_change_mat(2, device=trace.device)
 
     r2_tensor = torch.einsum(
         "ba, cb->ca",
-        cg_change_mat(2, device=trace.device),
+        change_mat,
         decomposed_preds,
     )
     return r2_tensor
