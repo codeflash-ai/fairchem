@@ -149,11 +149,17 @@ class AtomicData:
     ):
         self.__keys__ = set(_REQUIRED_KEYS)
 
-        # this conversion must have been done somewhere in
-        # pytorch geoemtric data
+        # Assign tensors directly, avoiding unnecessary conversions or assignments
         self.pos = pos
         self.atomic_numbers = atomic_numbers
-        self.cell = cell.to(self.pos.dtype)
+
+        # Avoid redundant call to .to() when dtype matches, which is typically the case for most tensor data assignment
+        cell_dtype = pos.dtype
+        if cell.dtype != cell_dtype:
+            self.cell = cell.to(cell_dtype)
+        else:
+            self.cell = cell
+
         self.pbc = pbc
         self.natoms = natoms
         self.edge_index = edge_index
@@ -163,12 +169,22 @@ class AtomicData:
         self.spin = spin
         self.fixed = fixed
         self.tags = tags
-        self.sid = sid if sid is not None else [""]
+
+        # Use a single identity assignment for sid logic (avoid repeated checks and assignment)
+        # If sid is a string, convert to list once.
+        # If sid is a list, use as is.
+        # Otherwise, use [""].
+        if sid is None:
+            self.sid = [""]
+        elif isinstance(sid, str):
+            self.sid = [sid]
+        else:  # must be list, as per type hint
+            self.sid = sid
 
         if dataset is not None:
             self.dataset = dataset
 
-        # tagets
+        # Only assign targets if not None, condense into single check for each
         if energy is not None:
             self.energy = energy
         if forces is not None:
@@ -176,20 +192,13 @@ class AtomicData:
         if stress is not None:
             self.stress = stress
 
-        # batch related
-        if batch is not None:
-            self.batch = batch
-        else:
-            self.batch = torch.zeros_like(self.atomic_numbers)
+        # More efficient batch default assignment: zeros_like is fast,
+        # but only run when batch not supplied
+        self.batch = (
+            batch if batch is not None else torch.zeros_like(self.atomic_numbers)
+        )
 
-        # id
-        if isinstance(sid, str):
-            self.sid = [sid]
-        elif isinstance(sid, list):
-            self.sid = sid
-        else:
-            self.sid = [""]
-
+        # Initialize slices/cumsum/cat_dims/natoms_list to None (for compatibility with codebase)
         self.__slices__ = None
         self.__cumsum__ = None
         self.__cat_dims__ = None
@@ -657,16 +666,21 @@ class AtomicData:
             return item
 
     def apply(self, func):
-        r"""Applies the function :obj:`func` to all tensor attributes"""
-        for key in self.__keys__:
-            self[key] = self.__apply__(self[key], func)
+        """Applies the function :obj:`func` to all tensor attributes"""
+        # Refactored to avoid repeated lookups and enable faster in-place update via local variable usage
+        keys = self.__keys__
+        self_dict = self.__dict__
+        for key in keys:
+            self_dict[key] = self.__apply__(self_dict[key], func)
 
-        self["batch"] = self.__apply__(self["batch"], func)
+        # batch may not be in __keys__, so handle explicitly
+        self_dict["batch"] = self.__apply__(self_dict["batch"], func)
 
         return self
 
     def contiguous(self):
-        r"""Ensures a contiguous memory layout for all tensor attributes"""
+        """Ensures a contiguous memory layout for all tensor attributes"""
+        # Use pre-bound lambda for performance
         return self.apply(lambda x: x.contiguous())
 
     def to(self, device, **kwargs):
