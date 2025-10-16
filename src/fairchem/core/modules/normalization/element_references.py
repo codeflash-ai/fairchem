@@ -37,21 +37,14 @@ class ElementReferences(nn.Module):
     @staticmethod
     def compute_references(batch, tensor, elem_refs, operation):
         assert tensor.shape[0] == len(batch)
-        with torch.autocast(elem_refs.device.type, enabled=False):
-            refs = torch.zeros(
-                tensor.shape, dtype=elem_refs.dtype, device=tensor.device
-            ).scatter_reduce(
-                0,
-                batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
-                reduce="sum",
-            )
-            if operation == "subtract":
-                return tensor - refs
-            elif operation == "add":
-                return tensor + refs
-            else:
-                raise ValueError(f"Unknown operation: {operation}")
+        refs = torch.zeros_like(tensor)
+        refs.index_add_(0, batch.batch_full, elem_refs[batch.atomic_numbers_full])
+        if operation == "subtract":
+            return tensor - refs
+        elif operation == "add":
+            return tensor + refs
+        else:
+            raise ValueError(f"Unknown operation: {operation}")
 
     def apply_refs(
         self,
