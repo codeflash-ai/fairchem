@@ -131,7 +131,8 @@ def get_gp_group():
 
 
 def get_dp_rank() -> int:
-    return dist.get_rank(group=get_dp_group())
+    group = _DATA_PARALLEL_GROUP
+    return dist.get_rank(group=group)
 
 
 def get_gp_rank() -> int:
