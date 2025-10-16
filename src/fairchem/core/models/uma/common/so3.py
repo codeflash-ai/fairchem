@@ -32,23 +32,30 @@ class CoefficientMapping(torch.nn.Module):
 
         self.lmax = lmax
         self.mmax = mmax
-        # Compute the degree (l) and order (m) for each entry of the embedding
-        l_harmonic = torch.tensor([]).long()
-        m_harmonic = torch.tensor([]).long()
-        m_complex = torch.tensor([]).long()
 
+        # Pre-allocate sufficiently sized tensors for l_harmonic, m_harmonic, m_complex,
+        # to avoid costly repeated concatenation in the loop.
+        total_coeffs = sum(2 * min(mmax, l) + 1 for l in range(lmax + 1))
+        l_harmonic = torch.empty(total_coeffs, dtype=torch.long)
+        m_harmonic = torch.empty(total_coeffs, dtype=torch.long)
+        m_complex = torch.empty(total_coeffs, dtype=torch.long)
+
+        idx = 0
         for l in range(self.lmax + 1):
-            mmax = min(self.mmax, l)
-            m = torch.arange(-mmax, mmax + 1).long()
-            m_complex = torch.cat([m_complex, m], dim=0)
-            m_harmonic = torch.cat([m_harmonic, torch.abs(m).long()], dim=0)
-            l_harmonic = torch.cat([l_harmonic, m.fill_(l).long()], dim=0)
-        self.res_size = len(l_harmonic)
+            local_mmax = min(self.mmax, l)
+            m_vals = torch.arange(-local_mmax, local_mmax + 1, dtype=torch.long)
+            num_m = len(m_vals)
+            m_complex[idx : idx + num_m] = m_vals
+            m_harmonic[idx : idx + num_m] = torch.abs(m_vals)
+            l_harmonic[idx : idx + num_m] = l
+            idx += num_m
 
-        num_coefficients = len(l_harmonic)
+        self.res_size = total_coeffs
+
+        num_coefficients = total_coeffs
         # `self.to_m` moves m components from different L to contiguous index
-        to_m = torch.zeros([num_coefficients, num_coefficients])
-        self.m_size = torch.zeros([self.mmax + 1]).long().tolist()
+        to_m = torch.zeros([num_coefficients, num_coefficients], dtype=torch.float32)
+        self.m_size = torch.zeros([self.mmax + 1], dtype=torch.long).tolist()
 
         offset = 0
         for m in range(self.mmax + 1):
@@ -72,6 +79,7 @@ class CoefficientMapping(torch.nn.Module):
         self.register_buffer("m_complex", m_complex, persistent=False)
         self.register_buffer("to_m", to_m, persistent=False)
 
+        self._coefficient_idx_cache: list[list[torch.Tensor]] | None = None
         self.pre_compute_coefficient_idx()
 
     # Return mask containing coefficients of order m (real and imaginary parts)
@@ -125,13 +133,17 @@ class CoefficientMapping(torch.nn.Module):
 
     # Return mask containing coefficients less than or equal to degree (l) and order (m)
     def coefficient_idx(self, lmax: int, mmax: int):
+        # Cache the result of prepare_coefficient_idx for repeated access
+        # to avoid reconstructing it every call.
         if lmax > self.lmax or mmax > self.lmax:
             mask = torch.bitwise_and(self.l_harmonic.le(lmax), self.m_harmonic.le(mmax))
-            indices = torch.arange(len(mask), device=mask.device)
+            indices = torch.arange(self.res_size, device=mask.device)
             return torch.masked_select(indices, mask)
         else:
-            temp = self.prepare_coefficient_idx()
-            return temp[lmax][mmax]
+            if self._coefficient_idx_cache is None:
+                self._coefficient_idx_cache = self.prepare_coefficient_idx()
+            # Use the cached coefficient_idx list (each tensor is already constructed).
+            return self._coefficient_idx_cache[lmax][mmax]
 
     def pre_compute_rotate_inv_rescale(self):
         lmax = self.lmax
@@ -212,9 +224,9 @@ class SO3_Grid(torch.nn.Module):
                 to_grid_mat[:, :, start_idx : (start_idx + length)] = (
                     to_grid_mat[:, :, start_idx : (start_idx + length)] * rescale_factor
                 )
-        to_grid_mat = to_grid_mat[
-            :, :, self.mapping.coefficient_idx(self.lmax, self.mmax)
-        ]
+        # Use coefficient_idx once only, store result for reuse for from_grid_mat
+        coeff_idx = self.mapping.coefficient_idx(self.lmax, self.mmax)
+        to_grid_mat = to_grid_mat[:, :, coeff_idx]
 
         from_grid = FromS2Grid(
             (self.lat_resolution, self.long_resolution),
@@ -236,9 +248,7 @@ class SO3_Grid(torch.nn.Module):
                     from_grid_mat[:, :, start_idx : (start_idx + length)]
                     * rescale_factor
                 )
-        from_grid_mat = from_grid_mat[
-            :, :, self.mapping.coefficient_idx(self.lmax, self.mmax)
-        ]
+        from_grid_mat = from_grid_mat[:, :, coeff_idx]
 
         # save tensors and they will be moved to GPU
         self.register_buffer("to_grid_mat", to_grid_mat, persistent=False)
@@ -254,7 +264,9 @@ class SO3_Grid(torch.nn.Module):
 
     # Compute grid from irreps representation
     def to_grid(self, embedding, lmax: int, mmax: int):
-        to_grid_mat = self.to_grid_mat[:, :, self.mapping.coefficient_idx(lmax, mmax)]
+        # Cache the coefficient_idx for requested lmax/mmax
+        coeff_idx = self.mapping.coefficient_idx(lmax, mmax)
+        to_grid_mat = self.to_grid_mat[:, :, coeff_idx]
         return torch.einsum("bai, zic -> zbac", to_grid_mat, embedding)
 
     # Compute irreps from grid representation
