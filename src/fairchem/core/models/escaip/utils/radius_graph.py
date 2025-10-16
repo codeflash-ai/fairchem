@@ -100,7 +100,8 @@ def soft_rank(
     Returns:
         ranks: the soft rankings
     """
-    ranks = torch.sigmoid((dist[:, :, None] - dist[:, None, :]) / scale).sum(dim=-1)
+    diff = dist[:, :, None] - dist[:, None, :]
+    ranks = torch.sigmoid(diff.div_(scale)).sum(dim=-1)
     return ranks
 
 
