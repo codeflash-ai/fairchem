@@ -147,13 +147,17 @@ class AtomicData:
         sid: list[str] | None = None,
         dataset: list[str] | str | None = None,
     ):
+        # Use list instead of set for __keys__ as _REQUIRED_KEYS is list and all lookups are membership checks,
+        # but for small number of keys (~12) list vs. set for initialization is faster; use set for large updates.
+        # However, we keep __keys__ as a set to ensure O(1) lookup if modified subsequently.
+        # Get _REQUIRED_KEYS directly (will always be present in global scope from import)
         self.__keys__ = set(_REQUIRED_KEYS)
 
-        # this conversion must have been done somewhere in
-        # pytorch geoemtric data
         self.pos = pos
         self.atomic_numbers = atomic_numbers
-        self.cell = cell.to(self.pos.dtype)
+        # Save dtype once to avoid repeated .dtype attribute lookups
+        pos_dtype = pos.dtype
+        self.cell = cell if cell.dtype == pos_dtype else cell.to(pos_dtype)
         self.pbc = pbc
         self.natoms = natoms
         self.edge_index = edge_index
@@ -163,12 +167,20 @@ class AtomicData:
         self.spin = spin
         self.fixed = fixed
         self.tags = tags
-        self.sid = sid if sid is not None else [""]
+
+        # sid handling (avoid checking type twice)
+        # Avoid string path for sid, skip check if sid is None (handled below)
+        if sid is None:
+            self.sid = [""]
+        elif isinstance(sid, str):
+            self.sid = [sid]
+        else:
+            self.sid = sid
 
         if dataset is not None:
             self.dataset = dataset
 
-        # tagets
+        # targets, prefer direct attribute assignment
         if energy is not None:
             self.energy = energy
         if forces is not None:
@@ -176,19 +188,10 @@ class AtomicData:
         if stress is not None:
             self.stress = stress
 
-        # batch related
-        if batch is not None:
-            self.batch = batch
-        else:
-            self.batch = torch.zeros_like(self.atomic_numbers)
-
-        # id
-        if isinstance(sid, str):
-            self.sid = [sid]
-        elif isinstance(sid, list):
-            self.sid = sid
-        else:
-            self.sid = [""]
+        # batch: prefer torch.zeros_like only if None, avoid redundant branch
+        self.batch = (
+            batch if batch is not None else torch.zeros_like(self.atomic_numbers)
+        )
 
         self.__slices__ = None
         self.__cumsum__ = None
@@ -632,7 +635,7 @@ class AtomicData:
         return 0
 
     def __inc__(self, key, value) -> int:
-        r"""Returns the incremental count to cumulatively increase the value
+        """Returns the incremental count to cumulatively increase the value
         of the next attribute of :obj:`key` when creating batches.
 
         .. note::
@@ -641,10 +644,10 @@ class AtomicData:
             if the batch concatenation process is corrupted for a specific data
             attribute.
         """
-        # Only the `*index*` attribute should be cumulatively summed
-        # up when creating batches.
+        # Avoid regex if not necessary: if substring "index" is in key, call natoms.item, else 0.
+        # This is measurably faster than re.search for simple substring checks.
         assert self.num_graphs == 1
-        return self.natoms.item() if bool(re.search("index", key)) else 0
+        return self.natoms.item() if "index" in key else 0
 
     def __apply__(self, item, func):
         if torch.is_tensor(item):
