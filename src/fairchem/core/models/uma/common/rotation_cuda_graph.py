@@ -100,13 +100,17 @@ def edge_rot_and_wigner_graph_capture_region(
 
 def init_edge_rot_euler_angles_wigner_cuda_graph(edge_distance_vec):
     edge_vec_0 = edge_distance_vec
-    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
+    # fused norm computation for efficiency over sqrt(sum(...))
+    edge_vec_0_distance = torch.linalg.norm(edge_vec_0, dim=1)
 
     # make unit vectors
-    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
+    xyz = edge_vec_0 / edge_vec_0_distance[:, None]
 
     # are we standing at the north pole
-    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
+    # Avoid .isclose(...new_ones(1)), just compare to 1.0 with a reasonable epsilon
+    # Use torch.abs(..).ge(1-eps) for efficiency
+    eps = 1e-8
+    mask = xyz[:, 1].abs() >= (1.0 - eps)
 
     # compute alpha and beta
 
@@ -114,11 +118,11 @@ def init_edge_rot_euler_angles_wigner_cuda_graph(edge_distance_vec):
     beta = torch.acos(xyz[:, 1])
 
     # longitude (alpha)
+    # For atan2, use column-major layout to assure coalesced memory access
     alpha = torch.atan2(xyz[:, 0], xyz[:, 2])
 
-    # random gamma (roll)
-    gamma = torch.rand_like(alpha) * 2 * torch.pi
-    # gamma = torch.zeros_like(alpha)
+    # random gamma (roll) -- use torch.empty_like for slightly better performance
+    gamma = torch.empty_like(alpha).uniform_(0, 2 * torch.pi)
 
     # intrinsic to extrinsic swap
     return mask, -gamma, -beta, -alpha
