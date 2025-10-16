@@ -50,8 +50,9 @@ def apply_one_tags(
     if skip_always:
         return atoms
 
-    if np.all(atoms.get_tags() == 0) or not skip_if_nonzero:
-        atoms.set_tags(np.ones(len(atoms)))
+    tags = atoms.get_tags()
+    if (skip_if_nonzero and np.count_nonzero(tags) == 0) or not skip_if_nonzero:
+        atoms.set_tags(np.ones(tags.shape, dtype=tags.dtype))
 
     return atoms
 
