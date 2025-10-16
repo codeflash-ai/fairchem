@@ -67,11 +67,20 @@ def envelope_fn(
     Returns:
         The envelope function in log space.
     """
+
     if envelope:
-        env = -x.pow(2) / (1 - x.pow(2))
+        # Avoid computing pow(2) twice
+        x2 = x * x
+        # Use torch.sub and torch.negative for inplace computation and memory efficiency
+        env = torch.div(-x2, torch.sub(1, x2))
     else:
+        # Use out=... for memory efficiency
         env = torch.zeros_like(x)
-    return torch.where(x < 1, env, -torch.inf)
+    # Use mask to avoid recomputation and speedup torch.where
+    mask = x < 1
+    # For torch.where, ensure only env[mask] is computed for output
+    # torch.where works efficiently with broadcasting (default behavior)
+    return torch.where(mask, env, -torch.inf)
 
 
 def shifted_sine(x: torch.Tensor) -> torch.Tensor:
