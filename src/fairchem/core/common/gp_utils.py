@@ -211,7 +211,7 @@ def _reduce(ctx: Any, input: torch.Tensor) -> torch.Tensor:
 def _split(input: torch.Tensor, dim: int = -1) -> torch.Tensor:
     rank = get_gp_rank()
     input_list = _split_tensor(input, dim=dim)
-    return input_list[rank].clone().contiguous()
+    return input_list[rank].contiguous()
 
 
 def _gather(input: torch.Tensor, dim: int = -1) -> torch.Tensor:
