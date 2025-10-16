@@ -40,9 +40,10 @@ class SigmoidSmearing(torch.nn.Module):
         offset = torch.linspace(start, stop, num_sigmoid)
         self.coeff = (basis_width_scalar / (offset[1] - offset[0])).item()
         self.register_buffer("offset", offset)
+        self.register_buffer("_offset_broadcasted", offset.view(1, -1))
 
     def forward(self, dist) -> torch.Tensor:
-        exp_dist = self.coeff * (dist.view(-1, 1) - self.offset.view(1, -1))  # type: ignore
+        exp_dist = self.coeff * (dist.view(-1, 1) - self._offset_broadcasted)  # type: ignore
         return torch.sigmoid(exp_dist)
 
 
