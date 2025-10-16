@@ -31,14 +31,22 @@ def stochastic_depth_2d(
     if not training or p == 0.0:
         return input
 
-    batch_size = batch.max() + 1
+    batch_size = (
+        int(torch.max(batch).item()) + 1
+    )  # Avoid extra Tensor allocation vs. .max() + 1
     survival_rate = 1.0 - p
-    size = [batch_size] + [1] * (input.ndim - 1)
-    noise = torch.empty(size, dtype=input.dtype, device=input.device)  # type: ignore
-    noise = noise.bernoulli_(survival_rate)
+    shape = (batch_size,) + (1,) * (input.ndim - 1)
+    # Use explicit torch.empty and in-place bernoulli for memory efficiency
+    noise = torch.empty(shape, dtype=input.dtype, device=input.device).bernoulli_(
+        survival_rate
+    )
     if survival_rate > 0.0:
-        noise.div_(survival_rate)
-    return input * noise[batch]
+        noise = noise.div_(
+            survival_rate
+        )  # .div_ only if survival_rate > 0, avoid nan for p=1
+    # Use torch.index_select for potential speedup on large batches
+    scaled_noise = noise.index_select(0, batch)
+    return input * scaled_noise
 
 
 # Exact same copy to make torch compile happy, or it will recompile...
