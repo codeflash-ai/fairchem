@@ -111,25 +111,30 @@ class LinearReferences(nn.Module):
         super().__init__()
         self.register_buffer(
             name="element_references",
-            tensor=(
-                element_references
-                if element_references is not None
-                else torch.zeros(max_num_elements + 1)
-            ),
+            tensor=element_references
+            if element_references is not None
+            else torch.zeros(max_num_elements + 1),
         )
 
     def _apply_refs(
         self, target: torch.Tensor, batch: AtomicData, sign: int, reshaped: bool = True
     ) -> torch.Tensor:
         """Apply references batch-wise"""
-        indices = batch.atomic_numbers.to(
-            dtype=torch.int, device=self.element_references.device
-        )
-        elemrefs = self.element_references[indices].to(dtype=target.dtype)
+        # minimize device conversions and unnecessary copies
+        indices = batch.atomic_numbers
+        if indices.device != self.element_references.device:
+            indices = indices.to(device=self.element_references.device)
+        # Only cast if necessary
+        if indices.dtype != torch.int64:
+            indices = indices.to(dtype=torch.int64)
+        elemrefs = self.element_references[indices]
+        if elemrefs.dtype != target.dtype:
+            elemrefs = elemrefs.to(dtype=target.dtype)
         # this option should not exist, all tensors should have compatible shapes in dataset and trainer outputs
         if reshaped:
             elemrefs = elemrefs.view(batch.natoms.sum(), -1)
 
+        # target.index_add is already relatively efficient (in-place) on the output tensor
         return target.index_add(0, batch.batch, elemrefs, alpha=sign)
 
     @torch.autocast(device_type="cuda", enabled=False)
