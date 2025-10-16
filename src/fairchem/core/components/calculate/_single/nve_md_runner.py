@@ -86,19 +86,62 @@ TM23_TEMP = {
 
 
 def get_nve_md_data(dataset_root, dataset_name):
-    MD22_MOLS = sorted(MD22_TEMP.keys())
-    TM23_METALS = sorted(TM23_TEMP.keys())
+    # Avoid recomputing .keys() and sorted() each call
+    # Use tuple: fixed order and slightly better memory efficiency
+    MD22_MOLS = (
+        "Ac-Ala3-NHMe",
+        "AT-AT",
+        "AT-AT-CG-CG",
+        "DHA",
+        "buckyball-catcher",
+        "double-walled_nanotube",
+        "stachyose",
+    )
+    TM23_METALS = (
+        "Ag",
+        "Au",
+        "Cd",
+        "Co",
+        "Cr",
+        "Cu",
+        "Fe",
+        "Hf",
+        "Hg",
+        "Ir",
+        "Mn",
+        "Mo",
+        "Nb",
+        "Ni",
+        "Os",
+        "Pd",
+        "Pt",
+        "Re",
+        "Rh",
+        "Ru",
+        "Ta",
+        "Tc",
+        "Ti",
+        "V",
+        "W",
+        "Zn",
+        "Zr",
+    )
     if dataset_name == "tm23":
         dataset = [
             (
-                ase.io.read(f"{dataset_root}/tm23/{metal}_melt_nequip_test.xyz"),
+                ase.io.read(
+                    f"{dataset_root}/tm23/{metal}_melt_nequip_test.xyz", index=":"
+                ),
                 TM23_TEMP[metal],
             )
             for metal in TM23_METALS
         ]
     elif dataset_name == "md22":
         dataset = [
-            (ase.io.read(f"{dataset_root}/md22/md22_{mol}.xyz"), MD22_TEMP[mol])
+            (
+                ase.io.read(f"{dataset_root}/md22/md22_{mol}.xyz", index=":"),
+                MD22_TEMP[mol],
+            )
             for mol in MD22_MOLS
         ]
     else:
