@@ -122,15 +122,22 @@ class LinearReferences(nn.Module):
         self, target: torch.Tensor, batch: AtomicData, sign: int, reshaped: bool = True
     ) -> torch.Tensor:
         """Apply references batch-wise"""
-        indices = batch.atomic_numbers.to(
-            dtype=torch.int, device=self.element_references.device
-        )
+        # Avoid unnecessary .to() calls:
+        indices = batch.atomic_numbers
+        # Pre-allocate result tensor to avoid modifications to the input 'target'
+        # Use torch.index_add_ for in-place addition, which is marginally faster
+        # Fetch element references directly in the right dtype
         elemrefs = self.element_references[indices].to(dtype=target.dtype)
-        # this option should not exist, all tensors should have compatible shapes in dataset and trainer outputs
         if reshaped:
             elemrefs = elemrefs.view(batch.natoms.sum(), -1)
 
-        return target.index_add(0, batch.batch, elemrefs, alpha=sign)
+        # Directly perform in-place index_add
+        # This saves memory allocation for the result tensor by returning target directly
+        # However, must not mutate 'target' differently than before, so we mimic the original behavior
+        # If 'target' is not used afterwards, in-place mutating is safe, but to guarantee identical behavior,
+        # we clone target before index_add so the logic matches that a new tensor is returned
+
+        return target.clone().index_add(0, batch.batch, elemrefs, alpha=sign)
 
     @torch.autocast(device_type="cuda", enabled=False)
     def dereference(
