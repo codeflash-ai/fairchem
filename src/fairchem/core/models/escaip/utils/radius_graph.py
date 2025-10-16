@@ -114,11 +114,15 @@ def hard_rank(
     Returns:
         ranks: the hard rankings
     """
+    idx = torch.argsort(dist, dim=-1)
     ranks = torch.empty_like(dist)
-    ranks[
-        torch.arange(dist.size(0), device=dist.device)[:, None],
-        torch.argsort(dist, dim=-1),
-    ] = torch.arange(dist.size(-1), device=dist.device, dtype=dist.dtype)
+    ranks.scatter_(
+        dim=1,
+        index=idx,
+        src=torch.arange(dist.size(-1), device=dist.device, dtype=dist.dtype).expand_as(
+            idx
+        ),
+    )
     return ranks
 
 
