@@ -143,7 +143,9 @@ def get_dp_world_size() -> int:
 
 
 def get_gp_world_size() -> int:
-    return 1 if not initialized() else dist.get_world_size(group=get_gp_group())
+    if _GRAPH_PARALLEL_GROUP is None:
+        return 1
+    return dist.get_world_size(group=_GRAPH_PARALLEL_GROUP)
 
 
 ########## DIST METHODS ##########
