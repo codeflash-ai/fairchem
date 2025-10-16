@@ -40,17 +40,15 @@ class ConcatDataset(Dataset[T_co]):
             )
 
         # convert the dictionary into two same order lists
-        self.datasets = []
-        self.dataset_names = []
-        for k, v in datasets.items():
-            self.datasets.append(v)
-            self.dataset_names.append(k)
+        self.dataset_names = list(datasets.keys())
+        self.datasets = list(datasets.values())
 
+        dataset_lens = [len(d) for d in self.datasets]
         self.sample_ratios = self._dataset_sampling(
-            [len(d) for d in self.datasets], self.dataset_names, sampling
+            dataset_lens, self.dataset_names, sampling
         )
         self.cumulative_sizes = self.cumsum(self.datasets, self.sample_ratios)
-        self.real_sizes = [len(d) for d in self.datasets]
+        self.real_sizes = dataset_lens
 
     def __len__(self):
         return self.cumulative_sizes[-1]
@@ -151,39 +149,40 @@ class ConcatDataset(Dataset[T_co]):
         """
         Return expansion ratios for each dataset based on sampling strategy
         """
-        if sampling["type"] == "explicit":
+        stype = sampling["type"]
+
+        if stype == "explicit":
+            ratios = sampling["ratios"]
             for dataset_name in dataset_names:
-                if dataset_name not in sampling["ratios"]:
+                if dataset_name not in ratios:
                     raise ValueError(
                         f"Missing ratio for dataset with name: {dataset_name}"
                     )
-            return [sampling["ratios"][dataset_name] for dataset_name in dataset_names]
-        if sampling["type"] == "balanced":
+            # list comprehension rather than loop for better perf
+            return [ratios[dataset_name] for dataset_name in dataset_names]
+
+        elif stype == "balanced":
             indv_target_size = max(dataset_sizes)
             return [indv_target_size / size for size in dataset_sizes]
-        elif sampling["type"] == "temperature":
+
+        elif stype == "temperature":
+            temp = sampling["temperature"]
             assert (
-                sampling["temperature"] >= 1.0
+                temp >= 1.0
             ), "Temperature must be >= 1.0, for custom weights use weighted sampling."
-            # total size before expansion
-            total_size = sum(dataset_sizes)
-            # calc the temperature sampling probabilities for each dataset
-            # p_i = (D_i / D_total)^(1/T)
-            temp_prob = [
-                (size / total_size) ** (1.0 / sampling["temperature"])
-                for size in dataset_sizes
-            ]
-            # normalize temp probabilities i.e. sum to 1
-            temp_prob = [r / sum(temp_prob) for r in temp_prob]
-            # find the target dataset size with temp sampling
-            # this assume largest dataset ratio is 1
-            max_idx = np.argmax(dataset_sizes)
-            target_size = dataset_sizes[max_idx] / temp_prob[max_idx]
-            # return expansion ratios
-            ratios = (target_size * np.array(temp_prob)) / np.array(dataset_sizes)
+            # Use numpy for all calculations, reduces python overhead
+            dsizes = np.array(dataset_sizes, dtype=np.float64)
+            total_size = dsizes.sum()
+            temp_prob = np.power(dsizes / total_size, 1.0 / temp)
+            temp_prob /= temp_prob.sum()
+            max_idx = np.argmax(dsizes)
+            target_size = dsizes[max_idx] / temp_prob[max_idx]
+            ratios = (target_size * temp_prob) / dsizes
             return ratios.tolist()
-        elif sampling["type"] == "weighted":
+
+        elif stype == "weighted":
             return sampling["ratios"]
+
         else:
             raise NotImplementedError(f"{sampling} not implemented.")
 
