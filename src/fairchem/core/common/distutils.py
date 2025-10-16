@@ -26,9 +26,10 @@ CURRENT_DEVICE_TYPE_STR = "CURRRENT_DEVICE_TYPE"
 
 
 def os_environ_get_or_throw(x: str) -> str:
-    if x not in os.environ:
+    try:
+        return os.environ[x]
+    except KeyError:
         raise RuntimeError(f"Could not find {x} in ENV variables")
-    return none_throws(os.environ.get(x))
 
 
 def get_init_method(
