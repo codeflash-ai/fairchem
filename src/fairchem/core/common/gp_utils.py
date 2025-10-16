@@ -135,7 +135,8 @@ def get_dp_rank() -> int:
 
 
 def get_gp_rank() -> int:
-    return dist.get_rank(group=get_gp_group())
+    group = _GRAPH_PARALLEL_GROUP  # Avoid extra function call
+    return dist.get_rank(group=group)
 
 
 def get_dp_world_size() -> int:
