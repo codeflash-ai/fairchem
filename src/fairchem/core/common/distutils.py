@@ -159,7 +159,12 @@ def get_rank() -> int:
 
 
 def get_world_size() -> int:
-    return dist.get_world_size() if initialized() else 1
+    # Avoid repeated initialization checks by caching result if performance-critical
+    if not dist.is_available():
+        return 1
+    if not dist.is_initialized():
+        return 1
+    return dist.get_world_size()
 
 
 def is_master() -> bool:
@@ -167,7 +172,12 @@ def is_master() -> bool:
 
 
 def synchronize() -> None:
-    if get_world_size() == 1:
+    # Avoid extra get_world_size() and initialized() calls
+    if (
+        not dist.is_available()
+        or not dist.is_initialized()
+        or dist.get_world_size() == 1
+    ):
         return
     dist.barrier()
 
