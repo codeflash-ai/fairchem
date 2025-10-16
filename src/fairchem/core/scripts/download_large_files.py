@@ -101,12 +101,13 @@ def change_path_for_pypi(
     for file in files_to_download:
         # We check the top-level name of the file so we know if it has a
         # home in PyPi builds
-        top_level_name = file.parts[0]
+        parts = file.parts
+        top_level_name = parts[0]
         if top_level_name == "tests" and test_par_dir is not None:
             new_files.append(test_par_dir / file)
         elif top_level_name == "src":
             # turn `src` into `site-packages` or whatever the correct name is
-            new_files.append(install_dir / Path(str(file).replace("src", par_dir, 1)))
+            new_files.append(install_dir.joinpath(par_dir, *parts[1:]))
     return new_files
 
 
