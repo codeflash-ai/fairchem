@@ -6,6 +6,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+_layer_map = None
+
 ## The following part is from xformers, copied here in case it's deprecated
 ## Ref: https://github.com/facebookresearch/xformers/blob/main/xformers/components/activations.py
 
@@ -171,8 +173,11 @@ class Skip(nn.Module):
 
 
 def get_normalization_layer(normalization_type: NormalizationType):
-    return {
-        NormalizationType.Skip: Skip,
-        NormalizationType.LayerNorm: nn.LayerNorm,
-        NormalizationType.RMSNorm: nn.RMSNorm,
-    }[normalization_type]
+    global _layer_map
+    if _layer_map is None:
+        _layer_map = {
+            NormalizationType.Skip: Skip,
+            NormalizationType.LayerNorm: nn.LayerNorm,
+            NormalizationType.RMSNorm: nn.RMSNorm,
+        }
+    return _layer_map[normalization_type]
