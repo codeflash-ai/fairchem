@@ -210,8 +210,13 @@ def _reduce(ctx: Any, input: torch.Tensor) -> torch.Tensor:
 
 def _split(input: torch.Tensor, dim: int = -1) -> torch.Tensor:
     rank = get_gp_rank()
+    # Avoid unnecessary clone() as .contiguous() suffices for most cases if input chunk view is non-contiguous
     input_list = _split_tensor(input, dim=dim)
-    return input_list[rank].clone().contiguous()
+    chunk = input_list[rank]
+    # Use contiguous() only if not already contiguous
+    if not chunk.is_contiguous():
+        chunk = chunk.contiguous()
+    return chunk
 
 
 def _gather(input: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -305,8 +310,8 @@ class GatherFromModelParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         (dim,) = ctx.saved_tensors
-        result = _split(grad_output, dim.item())
-        return result, None
+        # Avoid unnecessary function calls; pass value directly
+        return _split(grad_output, dim.item()), None
 
 
 class GatherFromModelParallelRegionSumGrad(torch.autograd.Function):
