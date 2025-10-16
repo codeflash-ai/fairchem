@@ -99,6 +99,10 @@ class EquivariantScalarsDropout(nn.Module):
         self.irreps = irreps
         self.drop_prob = drop_prob
 
+        # Precompute string representation to improve extra_repr efficiency,
+        # assuming irreps and drop_prob do not change after initialization.
+        self._extra_repr_str = f"irreps={irreps}, drop_prob={drop_prob}"
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not self.training or self.drop_prob == 0.0:
             return x
@@ -113,7 +117,7 @@ class EquivariantScalarsDropout(nn.Module):
         return torch.cat(out, dim=-1)
 
     def extra_repr(self) -> str:
-        return f"irreps={self.irreps}, drop_prob={self.drop_prob}"
+        return self._extra_repr_str
 
 
 class EquivariantDropoutArraySphericalHarmonics(nn.Module):
