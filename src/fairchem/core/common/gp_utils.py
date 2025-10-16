@@ -33,7 +33,7 @@ def ensure_div(a: int, b: int) -> None:
 
 
 def divide_and_check_no_remainder(a: int, b: int) -> int:
-    ensure_div(a, b)
+    assert a % b == 0
     return a // b
 
 
