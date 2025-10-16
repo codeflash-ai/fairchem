@@ -175,7 +175,9 @@ def synchronize() -> None:
 def broadcast(
     tensor: torch.Tensor, src, group=dist.group.WORLD, async_op: bool = False
 ) -> None:
-    if get_world_size() == 1:
+    if not (dist.is_available() and dist.is_initialized()):
+        return
+    if dist.get_world_size() == 1:
         return
     dist.broadcast(tensor, src, group, async_op)
 
