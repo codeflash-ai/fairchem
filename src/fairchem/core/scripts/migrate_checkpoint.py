@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import pickle
+import re
 
 import omegaconf
 import torch
@@ -38,9 +39,15 @@ def update_config(config_or_data):
         for i, item in enumerate(config_or_data):
             config_or_data[i] = update_config(item)
     elif isinstance(config_or_data, str):
-        for k, v in mapping.items():
-            if k in config_or_data:
-                config_or_data = config_or_data.replace(k, v)
+        pattern = getattr(update_config, "_mapping_pattern", None)
+        replacements = getattr(update_config, "_mapping_replacements", None)
+        if pattern is None or replacements is None:
+            mapping_keys = sorted(mapping.keys(), key=lambda k: -len(k))
+            pattern = re.compile("|".join(re.escape(k) for k in mapping_keys))
+            replacements = {k: v for k, v in mapping.items()}
+            update_config._mapping_pattern = pattern
+            update_config._mapping_replacements = replacements
+        config_or_data = pattern.sub(lambda m: replacements[m.group(0)], config_or_data)
         config_or_data = config_or_data.replace("osc", "omc")
     return config_or_data
 
