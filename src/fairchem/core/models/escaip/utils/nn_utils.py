@@ -25,8 +25,7 @@ class SquaredReLU(nn.Module):
         super().__init__()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_ = torch.nn.functional.relu(x)
-        return x_ * x_
+        return torch.relu(x).pow_(2)
 
 
 class StarReLU(nn.Module):
