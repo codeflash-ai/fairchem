@@ -33,16 +33,21 @@ class CoefficientMapping(torch.nn.Module):
         self.lmax = lmax
         self.mmax = mmax
         # Compute the degree (l) and order (m) for each entry of the embedding
-        l_harmonic = torch.tensor([]).long()
-        m_harmonic = torch.tensor([]).long()
-        m_complex = torch.tensor([]).long()
 
+        l_harmonic_list = []
+        m_harmonic_list = []
+        m_complex_list = []
+
+        # Use lists and concatenate once for efficiency
         for l in range(self.lmax + 1):
-            mmax = min(self.mmax, l)
-            m = torch.arange(-mmax, mmax + 1).long()
-            m_complex = torch.cat([m_complex, m], dim=0)
-            m_harmonic = torch.cat([m_harmonic, torch.abs(m).long()], dim=0)
-            l_harmonic = torch.cat([l_harmonic, m.fill_(l).long()], dim=0)
+            mmax_val = min(self.mmax, l)
+            m = torch.arange(-mmax_val, mmax_val + 1).long()
+            m_complex_list.append(m)
+            m_harmonic_list.append(torch.abs(m).long())
+            l_harmonic_list.append(torch.full_like(m, l).long())
+        l_harmonic = torch.cat(l_harmonic_list)
+        m_harmonic = torch.cat(m_harmonic_list)
+        m_complex = torch.cat(m_complex_list)
         self.res_size = len(l_harmonic)
 
         num_coefficients = len(l_harmonic)
@@ -72,6 +77,8 @@ class CoefficientMapping(torch.nn.Module):
         self.register_buffer("m_complex", m_complex, persistent=False)
         self.register_buffer("to_m", to_m, persistent=False)
 
+        # Precompute coefficient_idx buffers and also cache the complete hierarchy for fast lookup.
+        self._coefficient_idx_cache = self._precompute_coefficient_idx_cache()
         self.pre_compute_coefficient_idx()
 
     # Return mask containing coefficients of order m (real and imaginary parts)
@@ -125,13 +132,13 @@ class CoefficientMapping(torch.nn.Module):
 
     # Return mask containing coefficients less than or equal to degree (l) and order (m)
     def coefficient_idx(self, lmax: int, mmax: int):
-        if lmax > self.lmax or mmax > self.lmax:
-            mask = torch.bitwise_and(self.l_harmonic.le(lmax), self.m_harmonic.le(mmax))
-            indices = torch.arange(len(mask), device=mask.device)
-            return torch.masked_select(indices, mask)
-        else:
-            temp = self.prepare_coefficient_idx()
-            return temp[lmax][mmax]
+        # For lmax/mmax <= self.lmax, use the fast cache
+        if lmax <= self.lmax and mmax <= self.lmax:
+            return self._coefficient_idx_cache[lmax][mmax]
+        # Otherwise, compute on demand
+        mask = torch.bitwise_and(self.l_harmonic.le(lmax), self.m_harmonic.le(mmax))
+        indices = torch.arange(len(mask), device=mask.device)
+        return torch.masked_select(indices, mask)
 
     def pre_compute_rotate_inv_rescale(self):
         lmax = self.lmax
@@ -161,6 +168,18 @@ class CoefficientMapping(torch.nn.Module):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(lmax={self.lmax}, mmax={self.mmax})"
+
+    def _precompute_coefficient_idx_cache(self):
+        # The 2D cache allows O(1) lookup for typical lmax/mmax <= self.lmax
+        cache = []
+        for l in range(self.lmax + 1):
+            l_list = []
+            for m in range(self.lmax + 1):
+                mask = torch.bitwise_and(self.l_harmonic.le(l), self.m_harmonic.le(m))
+                indices = torch.arange(len(mask), device=mask.device)
+                l_list.append(torch.masked_select(indices, mask))
+            cache.append(l_list)
+        return cache
 
 
 class SO3_Grid(torch.nn.Module):
