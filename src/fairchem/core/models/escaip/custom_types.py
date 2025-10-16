@@ -59,16 +59,29 @@ def map_graph_attention_data_to_device(
 
 def flatten_graph_attention_data_with_spec(data, spec):
     # Flatten based on the in_spec structure
+
+    # Pre-fetch attribute names for performance
+    context_fields = spec.context[0]
+    data_dict = data.__dict__
     flat_data = []
-    for field_name in spec.context[0]:
-        field_value = getattr(data, field_name)
-        if isinstance(field_value, torch.Tensor):
-            flat_data.append(field_value)
-        elif field_value is None:
-            flat_data.append(None)
+
+    append = flat_data.append
+    extend = flat_data.extend
+    torch_Tensor = torch.Tensor
+
+    for field_name in context_fields:
+        # Use __dict__ direct access for optimized getattr
+        if field_name in data_dict:
+            field_value = data_dict[field_name]
         else:
-            # Handle custom types like AttentionBias
-            flat_data.extend(field_value.tree_flatten())
+            field_value = getattr(data, field_name)
+
+        if isinstance(field_value, torch_Tensor):
+            append(field_value)
+        elif field_value is None:
+            append(None)
+        else:
+            extend(field_value.tree_flatten())
     return tuple(flat_data)
 
 
